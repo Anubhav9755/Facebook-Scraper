@@ -1,5 +1,6 @@
 [phases.setup]
 nixPkgs = [
+  "python312",
   "chromium",
   "nss",
   "nspr",
@@ -17,18 +18,16 @@ nixPkgs = [
   "mesa",
   "expat",
   "xorg.libxcb",
-  "libxshmfence",
   "xorg.libXrender",
   "pango",
   "cairo",
-  "alsa-lib",
-  "python312"
+  "alsa-lib"
 ]
 
 [phases.install]
 cmds = [
   "pip install -r requirements.txt",
-  "python -m playwright install chromium"
+  "python -m playwright install chromium --with-deps"
 ]
 
 [start]
