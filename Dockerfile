@@ -1,21 +1,32 @@
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y `
-    wget gnupg curl `
-    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 `
-    libcups2 libdrm2 libdbus-1-3 libxkbcommon0 `
-    libx11-6 libxcomposite1 libxdamage1 libxext6 `
-    libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 `
-    libcairo2 libasound2 libxshmfence1 `
-    fonts-liberation libappindicator3-1 `
-    --no-install-recommends && `
+# Install system dependencies for Playwright/Chromium
+RUN apt-get update && apt-get install -y \
+    wget gnupg curl \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+    libcups2 libdrm2 libdbus-1-3 libxkbcommon0 \
+    libx11-6 libxcomposite1 libxdamage1 libxext6 \
+    libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 \
+    libcairo2 libasound2 libxshmfence1 \
+    fonts-liberation libappindicator3-1 \
+    --no-install-recommends && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers
 RUN playwright install chromium --with-deps
+
+# Copy app code
 COPY . .
+
+# Create output directory
 RUN mkdir -p output
+
 EXPOSE $PORT
+
 CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300
