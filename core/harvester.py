@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import logging
 import re
+import random
+import urllib.parse
 from typing import Optional
 
 from core.models   import ReelResult, HarvestSession
@@ -229,38 +231,93 @@ class Harvester:
 
     def _build_scrape_urls(self, query: str, query_type: str) -> list[str]:
         """
-        Build multiple Facebook URLs to scrape for the same query.
-        More angles = more reels discovered.
+        Build a ROTATING set of URLs every call so Facebook's algorithm
+        shows different reels each time — pulling from thousands of available
+        reels rather than the same 9 every search.
+
+        Strategy:
+        - Randomise which hashtag variants we hit
+        - Include Hindi/regional transliterations
+        - Hit topic-adjacent hashtags
+        - Vary search sorting filters
+        - Rotate through keyword variations
         """
-        urls = []
-        q_enc = query.replace(" ", "%20")
+        import random
+        q_enc = urllib.parse.quote(query)
+        tag   = query.replace(" ", "").lower()
+        words = [w for w in query.split() if len(w) > 3]
+
+        # Build a large pool of candidate URLs
+        pool: list[str] = []
 
         if query_type == "keyword":
-            # 1. Video search
-            urls.append(f"https://www.facebook.com/search/videos/?q={q_enc}")
-            # 2. Reels search (separate tab — different algorithm)
-            urls.append(f"https://www.facebook.com/search/reels/?q={q_enc}")
-            # 3. Top hashtag for this keyword
-            tag = query.replace(" ", "").lower()
-            urls.append(f"https://www.facebook.com/hashtag/{tag}/")
-            # 4. Related hashtags (common pattern)
-            words = [w for w in query.split() if len(w) > 3]
-            for w in words[:2]:
-                urls.append(f"https://www.facebook.com/hashtag/{w.lower()}/")
+            # Search pages with different filter params
+            pool += [
+                f"https://www.facebook.com/search/videos/?q={q_enc}",
+                f"https://www.facebook.com/search/reels/?q={q_enc}",
+                f"https://www.facebook.com/search/videos/?q={q_enc}&filters=eyJycF9jcmVhdGlvbl90aW1lIjoie1wibmFtZVwiOlwidmlkZW9zX2NocmFub2xvZ2ljYWxcIixcImFyZ3NcIjpcIlwifSJ9",
+            ]
+            # Primary hashtag
+            pool.append(f"https://www.facebook.com/hashtag/{tag}/")
+            # All individual words as hashtags
+            for w in query.split():
+                if len(w) > 2:
+                    pool.append(f"https://www.facebook.com/hashtag/{w.lower()}/")
+            # Common Hindi/regional suffix patterns
+            pool += [
+                f"https://www.facebook.com/hashtag/{tag}show/",
+                f"https://www.facebook.com/hashtag/{tag}comedy/",
+                f"https://www.facebook.com/hashtag/{tag}viral/",
+                f"https://www.facebook.com/hashtag/{tag}reels/",
+                f"https://www.facebook.com/hashtag/{tag}funny/",
+                f"https://www.facebook.com/hashtag/{tag}clips/",
+                f"https://www.facebook.com/hashtag/{tag}shorts/",
+                f"https://www.facebook.com/hashtag/best{tag}/",
+                f"https://www.facebook.com/hashtag/{tag}2024/",
+                f"https://www.facebook.com/hashtag/{tag}2025/",
+            ]
+            # Word combination hashtags
+            if len(words) >= 2:
+                pool.append(f"https://www.facebook.com/hashtag/{words[0].lower()}{words[1].lower()}/")
+            # Search with quotes for exact match
+            pool.append(f"https://www.facebook.com/search/videos/?q=%22{q_enc}%22")
 
         elif query_type == "hashtag":
-            tag = query.lstrip("#").replace(" ", "")
-            urls.append(f"https://www.facebook.com/hashtag/{tag}/")
-            urls.append(f"https://www.facebook.com/search/reels/?q=%23{tag}")
-            urls.append(f"https://www.facebook.com/search/videos/?q=%23{tag}")
+            tag_clean = query.lstrip("#").replace(" ", "")
+            pool += [
+                f"https://www.facebook.com/hashtag/{tag_clean}/",
+                f"https://www.facebook.com/search/reels/?q=%23{tag_clean}",
+                f"https://www.facebook.com/search/videos/?q=%23{tag_clean}",
+                f"https://www.facebook.com/search/videos/?q={tag_clean}",
+                f"https://www.facebook.com/hashtag/{tag_clean}viral/",
+                f"https://www.facebook.com/hashtag/{tag_clean}reels/",
+            ]
 
         elif query_type == "person":
             handle = "".join(w.capitalize() for w in query.split())
-            urls.append(f"https://www.facebook.com/{handle}/reels/")
-            urls.append(f"https://www.facebook.com/search/reels/?q={q_enc}")
-            urls.append(f"https://www.facebook.com/search/videos/?q={q_enc}")
+            pool += [
+                f"https://www.facebook.com/{handle}/reels/",
+                f"https://www.facebook.com/search/reels/?q={q_enc}",
+                f"https://www.facebook.com/search/videos/?q={q_enc}",
+                f"https://www.facebook.com/hashtag/{tag}/",
+            ]
+            for w in words[:3]:
+                pool.append(f"https://www.facebook.com/hashtag/{w.lower()}/")
 
-        return list(dict.fromkeys(urls))  # deduplicate, preserve order
+        # Deduplicate pool
+        pool = list(dict.fromkeys(pool))
+
+        # ALWAYS include the primary URLs first (most reliable)
+        primary = pool[:3]
+
+        # Randomly sample from the rest so each search hits different angles
+        rest = pool[3:]
+        random.shuffle(rest)
+        # Pick 5 more from the shuffled rest
+        secondary = rest[:5]
+
+        final = list(dict.fromkeys(primary + secondary))
+        return final
 
 
 # ── helpers ──────────────────────────────────────────────────────────
