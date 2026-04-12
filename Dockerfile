@@ -18,6 +18,4 @@ RUN playwright install chromium --with-deps
 COPY . .
 RUN mkdir -p output
 
-ENV PORT=8080
-
-CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT} --workers 2 --timeout 300"]
+ENTRYPOINT ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT:-8080} --workers 2 --timeout 300"]
