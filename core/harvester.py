@@ -174,20 +174,11 @@ class Harvester:
                  session.enriched_count, len(session.results))
 
         # ══════════════════════════════════════════════════════════════
-        #  PHASE 2b — Daily dedup: remove already-seen reels
-        #  Done AFTER enrichment so we score properly before cutting
+        #  PHASE 2b — Skip dedup in web mode, always return all results
         # ══════════════════════════════════════════════════════════════
 
-        session.rank_all()   # score first
-        all_results   = session.results[:]
-        new_results   = self._seen_db.filter_new(all_results)
-
-        # Replace session results with only new ones
-        session.results    = new_results
-        session._url_index = {r.url: i for i, r in enumerate(new_results)}
-
-        log.info("After daily dedup: %d new reels (of %d total found)",
-                 len(new_results), len(all_results))
+        session.rank_all()
+        log.info("Phase 2b: %d total reels ready", len(session.results))
 
         # ══════════════════════════════════════════════════════════════
         #  PHASE 3 — Playwright per-reel: get likes + comments
