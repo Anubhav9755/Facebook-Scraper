@@ -1,6 +1,5 @@
 FROM python:3.12-slim
 
-# Install system dependencies for Playwright/Chromium
 RUN apt-get update && apt-get install -y \
     wget gnupg curl \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
@@ -13,20 +12,12 @@ RUN apt-get update && apt-get install -y \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-
-# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Install Playwright browsers
 RUN playwright install chromium --with-deps
-
-# Copy app code
 COPY . .
-
-# Create output directory
 RUN mkdir -p output
 
-EXPOSE $PORT
+ENV PORT=8080
 
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 300
+CMD ["sh", "-c", "gunicorn app:app --bind 0.0.0.0:${PORT} --workers 2 --timeout 300"]
