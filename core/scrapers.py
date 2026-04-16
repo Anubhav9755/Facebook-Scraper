@@ -442,7 +442,9 @@ class PlaywrightScraper:
                         pass
 
                 # Per-URL scroll budget — spread limit across all URLs
-                per_url_limit = max(20, limit // len(urls))
+                per_url_limit = max(15, limit // len(urls))
+                # Hard time limit per page — prevents getting stuck on huge hashtags
+                PER_PAGE_TIMEOUT_SECS = 45
 
                 for url_idx, url in enumerate(urls):
                     if len(all_results) >= limit:
@@ -459,7 +461,7 @@ class PlaywrightScraper:
 
                         page.goto(url, wait_until="domcontentloaded",
                                   timeout=self._page_timeout)
-                        time.sleep(random.uniform(2.0, 3.5))
+                        time.sleep(random.uniform(1.5, 2.5))
 
                         if any(x in page.url for x in ("login","checkpoint","recover")):
                             log.error("Session expired")
@@ -469,10 +471,26 @@ class PlaywrightScraper:
                         if url_idx == 0:
                             self._dismiss_dialogs(page)
 
-                        page_results = self._scroll_and_collect(
-                            page, page_limit, PWTimeout, intercepted,
-                            global_seen=global_seen
-                        )
+                        # Run scroll with hard timeout in a thread so we can
+                        # kill it if it takes too long (e.g. huge hashtag pages)
+                        import threading as _threading
+                        page_results = []
+                        def _scroll_worker():
+                            nonlocal page_results
+                            try:
+                                page_results = self._scroll_and_collect(
+                                    page, page_limit, PWTimeout, intercepted,
+                                    global_seen=global_seen
+                                )
+                            except Exception as e:
+                                log.debug("scroll worker error: %s", e)
+
+                        t = _threading.Thread(target=_scroll_worker, daemon=True)
+                        t.start()
+                        t.join(timeout=PER_PAGE_TIMEOUT_SECS)
+                        if t.is_alive():
+                            log.info("scrape_multi: page timeout after %ds, moving on", PER_PAGE_TIMEOUT_SECS)
+
                         all_results.extend(page_results)
                         for r in page_results:
                             global_seen.add(r.url)
@@ -486,7 +504,7 @@ class PlaywrightScraper:
                         try: page.close()
                         except Exception: pass
 
-                    time.sleep(random.uniform(1.0, 2.0))
+                    time.sleep(random.uniform(0.5, 1.0))
 
                 # Add intercepted IDs that weren't caught by DOM scan
                 for rid in intercepted:
