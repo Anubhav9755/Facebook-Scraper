@@ -259,11 +259,14 @@ class Harvester:
             ]
             # Primary hashtag
             pool.append(f"https://www.facebook.com/hashtag/{tag}/")
-            # All individual words as hashtags
+            # All individual words as hashtags — only if combined with query
             for w in query.split():
-                if len(w) > 2:
-                    pool.append(f"https://www.facebook.com/hashtag/{w.lower()}/")
-            # Common Hindi/regional suffix patterns
+                if len(w) > 3:
+                    # Only use word+query combos, never bare single words
+                    # (bare words like #comedy or #sharma have billions of posts → timeout)
+                    pool.append(f"https://www.facebook.com/hashtag/{tag}{w.lower()}/")
+                    pool.append(f"https://www.facebook.com/hashtag/{w.lower()}{tag}/")
+            # Common suffix patterns — always query-specific
             pool += [
                 f"https://www.facebook.com/hashtag/{tag}show/",
                 f"https://www.facebook.com/hashtag/{tag}comedy/",
@@ -273,7 +276,6 @@ class Harvester:
                 f"https://www.facebook.com/hashtag/{tag}clips/",
                 f"https://www.facebook.com/hashtag/{tag}shorts/",
                 f"https://www.facebook.com/hashtag/best{tag}/",
-                f"https://www.facebook.com/hashtag/{tag}2024/",
                 f"https://www.facebook.com/hashtag/{tag}2025/",
             ]
             # Word combination hashtags
